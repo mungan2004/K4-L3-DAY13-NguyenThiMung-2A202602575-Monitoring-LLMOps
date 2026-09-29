@@ -1,25 +1,25 @@
 alerts:
-  - name: TODO_alert_1
-    severity: TODO
-    condition: TODO
-    duration: TODO
+  - name: HighResponseLatency
+    severity: page
+    condition: p95_latency > 3000ms
+    duration: 5m
     type: symptom-based
-    channel: slack
-    owner: TODO
+    channel: slack-oncall
+    owner: "@team-platform"
     runbook: docs/alerts.md#alert-1
-  - name: TODO_alert_2
-    severity: TODO
-    condition: TODO
-    duration: TODO
+  - name: HighErrorRate
+    severity: page
+    condition: error_rate > 5%
+    duration: 3m
     type: symptom-based
-    channel: slack
-    owner: TODO
+    channel: slack-oncall
+    owner: "@team-ai"
     runbook: docs/alerts.md#alert-2
-  - name: TODO_alert_3
-    severity: TODO
-    condition: TODO
-    duration: TODO
+  - name: CostSpike
+    severity: ticket
+    condition: cost_usd_per_minute > 2.5
+    duration: 10m
     type: symptom-based
-    channel: slack
-    owner: TODO
+    channel: slack-finops
+    owner: "@team-finops"
     runbook: docs/alerts.md#alert-3

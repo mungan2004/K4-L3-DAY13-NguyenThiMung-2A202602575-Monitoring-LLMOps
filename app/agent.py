@@ -51,7 +51,24 @@ class LabAgent:
             },
         ):
             started = time.perf_counter()
-            docs = retrieve(message)
+
+            @observe(as_type="span", capture_input=False, capture_output=False, name="retrieval")
+            def _do_retrieve(msg: str):
+                try:
+                    from langfuse.decorators import langfuse_context
+                    langfuse_context.update_current_observation(input=summarize_text(msg))
+                except Exception:
+                    pass
+                res = retrieve(msg)
+                try:
+                    from langfuse.decorators import langfuse_context
+                    langfuse_context.update_current_observation(output={"doc_count": len(res)})
+                except Exception:
+                    pass
+                return res
+
+            docs = _do_retrieve(message)
+
             prompt = resolve_prompt(
                 langfuse_client,
                 feature=feature,
@@ -71,13 +88,38 @@ class LabAgent:
                 },
                 version=prompt.version,
             )
-            # TODO (CP2): instrument retrieve() and FakeLLM.generate() as child
-            # observations. The nested generation must receive prompt, usage and cost.
+
+            @observe(as_type="generation", capture_input=False, capture_output=False, name="llm-generation")
+            def _do_generate(text: str, prmpt):
+                try:
+                    from langfuse.decorators import langfuse_context
+                    langfuse_context.update_current_observation(
+                        input=summarize_text(text),
+                        model=self.model,
+                        prompt=prmpt
+                    )
+                except Exception:
+                    pass
+                
+                res = self.llm.generate(text)
+                cost = self._estimate_cost(res.usage.input_tokens, res.usage.output_tokens)
+                
+                try:
+                    from langfuse.decorators import langfuse_context
+                    langfuse_context.update_current_observation(
+                        output=summarize_text(res.text),
+                        usage={"input": res.usage.input_tokens, "output": res.usage.output_tokens},
+                        cost=cost
+                    )
+                except Exception:
+                    pass
+                return res, cost
+
             with propagate_attributes(prompt=prompt.managed_prompt):
-                response = self.llm.generate(prompt.text)
+                response, cost_usd = _do_generate(prompt.text, prompt.managed_prompt)
+
             quality_score = self._heuristic_quality(message, response.text, docs)
             latency_ms = int((time.perf_counter() - started) * 1000)
-            cost_usd = self._estimate_cost(response.usage.input_tokens, response.usage.output_tokens)
 
         metrics.record_request(
             latency_ms=latency_ms,
